@@ -1,4 +1,4 @@
-package seven.dna2ee.yiguanjia.ui.accupoint;
+package seven.dna2ee.yiguanjia.ui.pulsewave;
 
 import android.app.Activity;
 import android.app.PendingIntent;
@@ -14,30 +14,45 @@ import seven.dna2ee.yiguanjia.driver.SerialInputOutputManager;
 import seven.dna2ee.yiguanjia.driver.UsbSerialDriver;
 import seven.dna2ee.yiguanjia.driver.UsbSerialPort;
 import seven.dna2ee.yiguanjia.driver.UsbSerialProber;
-import seven.dna2ee.yiguanjia.util.StringEx;
 
-public class AccuPointCollector implements Runnable, SerialInputOutputManager.Listener {
+public class PulseWaveCollector implements Runnable, SerialInputOutputManager.Listener {
     private static final int WAIT_MILLIS = 2000;
+    private static final int SAMPLE_PER_MIN = 1830 * 60;
     private static final String ACTION_USB_PERMISSION = "seven.dna2ee.yiguanjia.USB_PERMISSION";
 
     private Activity activity;
-    private AccuPointViewModel viewModel;
+    private PulseWaveViewModel viewModel;
     private UsbManager usbMgr;
     private UsbSerialDriver driver;
 
-    private double accupoint;
+    private int[] buf = new int[SAMPLE_PER_MIN + 1];
+    private int bufCur = 0;
+    private int bufHead = 0;
     private boolean init;
     private boolean loop;
 
-    private String debugData = "";
+    // private String debugData = "";
 
-    public AccuPointCollector(AccuPointViewModel _viewModel, UsbManager _usbMgr, Activity _activity) {
+    private void putOnePoint(int data) {
+        buf[bufCur] = data;
+        bufCur ++;
+        if (bufCur >= SAMPLE_PER_MIN + 1) {
+            bufCur = 0;
+        }
+        if (bufCur == bufHead) {
+            bufHead ++;
+            if (bufHead >= SAMPLE_PER_MIN + 1) {
+                bufHead = 0;
+            }
+        }
+    }
+
+    public PulseWaveCollector(PulseWaveViewModel _viewModel, UsbManager _usbMgr, Activity _activity) {
         this.viewModel = _viewModel;
         this.usbMgr = _usbMgr;
         this.activity = _activity;
         this.loop = false;
         this.init = true;
-        this.accupoint = -1.0;
     }
 
     private void attemptToGetUSBPermission() {
@@ -55,14 +70,23 @@ public class AccuPointCollector implements Runnable, SerialInputOutputManager.Li
     public void start() {
         this.loop = true;
         this.init = false;
-        new Thread(this, "AccuPointCollector").start();
+        new Thread(this, "PulseWaveCollector").start();
     }
 
     private void sendUserMessage(String s) {
         this.activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                AccuPointCollector.this.viewModel.setMsg(s);
+                PulseWaveCollector.this.viewModel.setMsg(s);
+            }
+        });
+    }
+
+    private void sendNewPoints(float[] fs) {
+        this.activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                PulseWaveCollector.this.viewModel.setNewPoints(fs);
             }
         });
     }
@@ -105,21 +129,9 @@ public class AccuPointCollector implements Runnable, SerialInputOutputManager.Li
             port.setParameters(115200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
             usbIoManager = new SerialInputOutputManager(port, this);
             usbIoManager.start();
-            port.write(new byte[]{ (byte)0xC0, 0x03 }, WAIT_MILLIS);
+            port.write(new byte[]{ (byte)0xC0, 0x0C }, WAIT_MILLIS);
+            this.viewModel.setMsg("collecting ...");
             while (this.loop) {
-                // sendUserMessage(String.format("data: %s", debugData));
-                if (this.accupoint < 0 && !this.init) {
-                    this.init = true;
-                    this.viewModel.setAccupoint(Double.POSITIVE_INFINITY);
-                    sendUserMessage("initializing ...");
-                } else if (this.accupoint < 1.0e-3) {
-                    this.viewModel.setAccupoint(Double.POSITIVE_INFINITY);
-                    sendUserMessage(String.format("Current: Inf"));
-                } else {
-                    double s = 500000.0 / this.accupoint;
-                    this.viewModel.setAccupoint(s);
-                    sendUserMessage(String.format("Current: %.2f", s));
-                }
                 Thread.sleep(1000);
             }
             port.write(new byte[] { (byte)0xC0, 0x00, 0x00, 0x00 }, WAIT_MILLIS);
@@ -142,23 +154,19 @@ public class AccuPointCollector implements Runnable, SerialInputOutputManager.Li
     @Override
     public void onNewData(byte[] data) {
         int n = data.length;
-        if (n < 2) return;
-        if (n % 2 != 0) return;
-        double sum = 0.0;
-        int count = 0;
-        for (int i = 1; i < n; i += 4) {
-            sum += data[i];
-            count ++;
+        if (n < 4) return;
+        // A0 00 .. ..
+        int N = n / 4, cur = 0;
+        float[] newpoints = new float[N];
+        for (int i = 2; i < n; i += 4) {
+            int ah = data[i], al = data[i+1];
+            int v = ah * 256 + al;
+            newpoints[cur] = v; cur ++;
+            putOnePoint(v);
         }
-        if (count > 0) {
-            if (this.accupoint < 0) {
-                this.accupoint = sum / count;
-            } else {
-                this.accupoint = this.accupoint * 0.9 + sum / count * 0.1;
-            }
-        }
-        this.debugData = StringEx.bytesToHex(data);
-        Log.i("YiGuanJia", String.format("!!Data!!: %s", debugData));
+        sendNewPoints(newpoints);
+        // this.debugData = StringEx.bytesToHex(data);
+        // Log.i("YiGuanJia", String.format("!!Data!!: %s", debugData));
     }
 
     @Override

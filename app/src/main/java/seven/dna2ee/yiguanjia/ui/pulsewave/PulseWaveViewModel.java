@@ -4,16 +4,31 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
+import java.util.ArrayList;
+
 public class PulseWaveViewModel extends ViewModel {
 
-    private MutableLiveData<String> mText;
+    private MutableLiveData<String> textCurrent;
+    private MutableLiveData<float[]> listNewPoints;
+
+    private String msg;
 
     public PulseWaveViewModel() {
-        mText = new MutableLiveData<>();
-        mText.setValue("This is PulseWave dashboard fragment");
+        this.textCurrent = new MutableLiveData<>();
+        this.listNewPoints = new MutableLiveData<>();
+        this.msg = "...";
     }
 
-    public LiveData<String> getText() {
-        return mText;
+    public void setMsg(String _msg) {
+        this.msg = _msg;
+        textCurrent.setValue(this.msg);
     }
+
+    public void setNewPoints(float[] data) {
+        listNewPoints.setValue(data);
+    }
+
+    public LiveData<String> getCurrent() { return textCurrent; }
+
+    public LiveData<float[]> getNewPoints() { return listNewPoints; }
 }

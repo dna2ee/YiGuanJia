@@ -15,7 +15,7 @@
         android:id="@+id/navigation_pulsewave"
         android:name="seven.dna2ee.yiguanjia.ui.pulsewave.PulseWaveFragment"
         android:label="@string/title_pulsewave"
-        tools:layout="@layout/fragment_pulsewave" />
+        tools:layout="@layout/fragment_empty" />
 
     <fragment
         android:id="@+id/navigation_accupoint"
