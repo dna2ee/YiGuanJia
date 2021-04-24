@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">YiGuanJia</string>
+    <string name="title_home">Home</string>
+    <string name="title_pulsewave">PulseWave</string>
+    <string name="title_accupoint">AccuPoint</string>
+    <string name="title_notifications">Notifications</string>
+</resources>
