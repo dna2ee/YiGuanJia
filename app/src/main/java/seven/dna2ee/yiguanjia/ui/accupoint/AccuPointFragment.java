@@ -2,9 +2,12 @@ package seven.dna2ee.yiguanjia.ui.accupoint;
 
 import android.content.Context;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.text.Editable;
 import android.text.InputType;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +25,16 @@ import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.google.android.material.textfield.TextInputEditText;
+
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
 
 import seven.dna2ee.yiguanjia.R;
 
@@ -49,11 +62,20 @@ public class AccuPointFragment extends Fragment {
         body.addView(panelInput);
 
         final ScrollView panelRecords = new ScrollView(context);
+        final LinearLayout layoutRecords = new LinearLayout(context);
+        layoutRecords.setOrientation(LinearLayout.VERTICAL);
         final TextView txtRecords = new TextView(context);
         txtRecords.setTextIsSelectable(true);
         txtRecords.setText("");
         txtRecords.setFocusable(true);
-        panelRecords.addView(txtRecords);
+        layoutRecords.addView(txtRecords);
+
+        final Button btnSave = new Button(context);
+        btnSave.setText("save");
+        btnSave.setFocusable(true);
+        layoutRecords.addView(btnSave);
+
+        panelRecords.addView(layoutRecords);
         panelRecords.setPadding(5, 5, 5, 5);
         body.addView(panelRecords);
 
@@ -97,6 +119,41 @@ public class AccuPointFragment extends Fragment {
                 collector.stop();
                 viewModel.setMsg("Collector stopped.");
                 return true;
+            }
+        });
+        btnSave.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ArrayList<String> r = viewModel.getRawRecords();
+                Date d = new Date();
+                Calendar cal = Calendar.getInstance(TimeZone.getDefault());
+                cal.setTime(d);
+
+                String externalDir = "/sdcard";
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    externalDir = Environment.getStorageDirectory().getAbsolutePath();
+                }
+
+                File f = new File(String.format(
+                        externalDir + "/accupoint-%d-%d-%d-%d-%d-%d.%d.txt",
+                        cal.get(Calendar.YEAR),
+                        cal.get(Calendar.MONTH),
+                        cal.get(Calendar.DAY_OF_MONTH),
+                        cal.get(Calendar.HOUR),
+                        cal.get(Calendar.MINUTE),
+                        cal.get(Calendar.SECOND),
+                        cal.get(Calendar.MILLISECOND)
+                ));
+                try {
+                    PrintWriter writer = new PrintWriter(f);
+                    for (String one : r) {
+                        writer.println(one);
+                    }
+                    writer.close();
+                } catch (IOException e) {
+                    Log.e("YiGuanJia", e.toString());
+                } finally {
+                }
             }
         });
 

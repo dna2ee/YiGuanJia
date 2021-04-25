@@ -1,37 +1,48 @@
 package seven.dna2ee.yiguanjia.ui.pulsewave;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.github.mikephil.charting.charts.BarChart;
 import com.github.mikephil.charting.charts.LineChart;
-import com.github.mikephil.charting.data.BarData;
-import com.github.mikephil.charting.data.BarDataSet;
-import com.github.mikephil.charting.data.BarEntry;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
 
 import seven.dna2ee.yiguanjia.R;
 
 public class PulseWaveFragment extends Fragment {
 
+    private static final int CHART_POINT_N = 3000;
     private PulseWaveCollector collector;
     private LineChart chart;
     private ArrayList<Entry> values;
@@ -51,6 +62,8 @@ public class PulseWaveFragment extends Fragment {
         body.addView(panelInput);
 
         final ScrollView panelRecords = new ScrollView(context);
+        final LinearLayout layoutRecords = new LinearLayout(context);
+        layoutRecords.setOrientation(LinearLayout.VERTICAL);
         this.chart = new LineChart(context);
         chart.setDrawBorders(false);
         chart.setMaxVisibleValueCount(20);
@@ -74,8 +87,17 @@ public class PulseWaveFragment extends Fragment {
         }
         chart.setData(new LineData(new LineDataSet[] { new LineDataSet(values, "test") }));
         chart.getData().setHighlightEnabled(false);
-        ((LineDataSet)chart.getData().getDataSetByIndex(0)).setDrawCircles(false);
-        panelRecords.addView(chart);
+        LineDataSet dataset = (LineDataSet)chart.getData().getDataSetByIndex(0);
+        dataset.setDrawCircles(false);
+        dataset.setColor(Color.RED);
+        layoutRecords.addView(chart);
+
+        final Button btnSave = new Button(context);
+        btnSave.setText("save");
+        btnSave.setFocusable(true);
+        layoutRecords.addView(btnSave);
+        panelRecords.addView(layoutRecords);
+
         panelRecords.setPadding(5, 5, 5, 5);
         body.addView(panelRecords);
 
@@ -101,14 +123,14 @@ public class PulseWaveFragment extends Fragment {
                     values.add(new Entry(cur, x));
                     cur ++;
                 }
-                n = n + newpoints.length - 1000;
+                n = n + newpoints.length - CHART_POINT_N;
                 if (n > 0) {
                     Entry[] origin = new Entry[values.size()]; values.toArray(origin);
-                    Entry[] trunc = new Entry[1000];
-                    System.arraycopy(origin, n, trunc, 0, 1000);
+                    Entry[] trunc = new Entry[CHART_POINT_N];
+                    System.arraycopy(origin, n, trunc, 0, CHART_POINT_N);
                     values = new ArrayList<>(Arrays.asList(trunc));
                 }
-                if (cur > 100000) {
+                if (cur > 1000000) {
                     cur = 0;
                     for (Entry x : values) {
                         x.setX(cur); cur ++;
@@ -137,6 +159,44 @@ public class PulseWaveFragment extends Fragment {
                 collector.stop();
                 viewModel.setMsg("Collector stopped.");
                 return true;
+            }
+        });
+        btnSave.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ArrayList<Integer> r = collector.getPulseWave1min();
+                Date d = new Date();
+                Calendar cal = Calendar.getInstance(TimeZone.getDefault());
+                cal.setTime(d);
+
+                String externalDir = "/sdcard";
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    externalDir = Environment.getStorageDirectory().getAbsolutePath();
+                }
+
+                File f = new File(String.format(
+                        externalDir + "/pulsewave-%d-%d-%d-%d-%d-%d.%d.dat",
+                        cal.get(Calendar.YEAR),
+                        cal.get(Calendar.MONTH),
+                        cal.get(Calendar.DAY_OF_MONTH),
+                        cal.get(Calendar.HOUR),
+                        cal.get(Calendar.MINUTE),
+                        cal.get(Calendar.SECOND),
+                        cal.get(Calendar.MILLISECOND)
+                ));
+                byte int16LE[] = new byte[2];
+                try {
+                    FileOutputStream writer = new FileOutputStream(f);
+                    for (int x : r) {
+                        int16LE[0] = (byte)(x % 256);
+                        int16LE[1] = (byte)(x / 256);
+                        writer.write(int16LE);
+                    }
+                    writer.close();
+                } catch (IOException e) {
+                    Log.e("YiGuanJia", e.toString());
+                } finally {
+                }
             }
         });
 

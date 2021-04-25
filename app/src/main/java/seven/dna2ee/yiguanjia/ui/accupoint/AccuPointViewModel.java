@@ -36,6 +36,10 @@ public class AccuPointViewModel extends ViewModel {
         textRecords.setValue("");
     }
 
+    public ArrayList<String> getRawRecords() {
+        return this.records;
+    }
+
     public void setAccupoint(double val) {
         this.accupoint = val;
     }

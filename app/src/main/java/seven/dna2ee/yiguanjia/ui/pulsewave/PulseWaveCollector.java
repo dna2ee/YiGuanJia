@@ -8,6 +8,7 @@ import android.hardware.usb.UsbManager;
 import android.util.Log;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import seven.dna2ee.yiguanjia.driver.SerialInputOutputManager;
@@ -45,6 +46,17 @@ public class PulseWaveCollector implements Runnable, SerialInputOutputManager.Li
                 bufHead = 0;
             }
         }
+    }
+
+    public ArrayList<Integer> getPulseWave1min() {
+        ArrayList<Integer> r = new ArrayList<>();
+        for (int i = bufHead, n = bufHead==0?(buf.length-1):buf.length; i < n; i ++) {
+            r.add(buf[i]);
+        }
+        for (int i = 0, n = bufHead - 1; i < n; i++) {
+            r.add(buf[i]);
+        }
+        return r;
     }
 
     public PulseWaveCollector(PulseWaveViewModel _viewModel, UsbManager _usbMgr, Activity _activity) {
@@ -130,14 +142,14 @@ public class PulseWaveCollector implements Runnable, SerialInputOutputManager.Li
             usbIoManager = new SerialInputOutputManager(port, this);
             usbIoManager.start();
             port.write(new byte[]{ (byte)0xC0, 0x0C }, WAIT_MILLIS);
-            this.viewModel.setMsg("collecting ...");
+            sendUserMessage("collecting ...");
             while (this.loop) {
                 Thread.sleep(1000);
             }
             port.write(new byte[] { (byte)0xC0, 0x00, 0x00, 0x00 }, WAIT_MILLIS);
         } catch (InterruptedException e) {
         } catch (IOException e) {
-            this.viewModel.setMsg(e.toString());
+            sendUserMessage(e.toString());
         } finally {
             this.loop = false;
             if (usbIoManager != null) {
